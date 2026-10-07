@@ -58,6 +58,7 @@ static void *coalesce(void *bp);
 static void *find_fit(size_t asize);
 static void place(void *bp, size_t asize);
 static char *free_listp;
+static void *rover;
 
 void insert_free(void *bp)
 {
@@ -70,9 +71,17 @@ void insert_free(void *bp)
     }
 
     free_listp = bp;
+
+    if (rover == NULL)
+        rover = bp;
 }
 void remove_free(void *bp)
 {
+    if (bp == rover)
+    {
+        rover = GET_SUCC(bp);
+    }
+
     if (GET_PRED(bp) == NULL)
     {
         free_listp = GET_SUCC(bp);
@@ -83,7 +92,7 @@ void remove_free(void *bp)
     else if (GET_SUCC(bp) == NULL)
     {
         SET_SUCC(GET_PRED(bp), NULL);
-        SET_PRED(bp, NULL); // 없어도 됨
+        SET_PRED(bp, NULL);
     }
 
     else
@@ -91,11 +100,15 @@ void remove_free(void *bp)
         SET_SUCC(GET_PRED(bp), GET_SUCC(bp));
         SET_PRED(GET_SUCC(bp), GET_PRED(bp));
     }
+
+    if (rover == NULL)
+        rover = free_listp;
 }
 
 int mm_init(void)
 {
     free_listp = NULL;
+    rover = NULL;
 
     if ((heap_listp = mem_sbrk(4 * WSIZE)) == (void *)-1)
         return -1;
@@ -207,18 +220,40 @@ static void *coalesce(void *bp) // 반복되는 코드 최적화 필요
     return bp;
 }
 
-// first_fit
+// next_fit
 static void *find_fit(size_t asize)
 {
     void *bp;
+    void *start;
 
-    for (bp = free_listp; bp != NULL; bp = GET_SUCC(bp))
+    if (free_listp == NULL)
+        return NULL;
+
+    if (rover == NULL)
+        rover = free_listp;
+
+    start = rover;
+    bp = rover;
+
+    do
     {
         if (asize <= GET_SIZE(HDRP(bp)))
         {
+            rover = GET_SUCC(bp);
+
+            if (rover == NULL)
+                rover = free_listp;
+
             return bp;
         }
-    }
+
+        bp = GET_SUCC(bp);
+
+        if (bp == NULL)
+            bp = free_listp;
+
+    } while (bp != start);
+
     return NULL;
 }
 
@@ -244,8 +279,6 @@ static void place(void *bp, size_t asize)
         PUT(FTRP(bp), PACK(csize, 1));
     }
 }
-static int merge_count = 0;
-static int copy_count = 0;
 
 void *mm_realloc(void *bp, size_t size)
 {
@@ -291,7 +324,6 @@ void *mm_realloc(void *bp, size_t size)
     {
         if (!next_alloc && oldsize + next_size >= asize)
         {
-            merge_count++;
             size_t csize = oldsize + next_size;
 
             remove_free(NEXT_BLKP(bp));
@@ -318,7 +350,6 @@ void *mm_realloc(void *bp, size_t size)
         }
         else
         {
-            copy_count++;
             void *newbp = mm_malloc(size); // 새로 할당된 공간의 시작주소 반환
 
             if (newbp == NULL)
@@ -329,5 +360,4 @@ void *mm_realloc(void *bp, size_t size)
             return newbp;
         }
     }
-    fprintf(stderr, "merge=%d copy=%d\n", merge_count, copy_count);
 }
