@@ -220,41 +220,28 @@ static void *coalesce(void *bp) // 반복되는 코드 최적화 필요
     return bp;
 }
 
-// next_fit
+// best_fit
 static void *find_fit(size_t asize)
 {
     void *bp;
-    void *start;
+    void *best_bp = NULL;
+    size_t best_size = (size_t)-1;  // 최댓값으로 초기화
 
-    if (free_listp == NULL)
-        return NULL;
-
-    if (rover == NULL)
-        rover = free_listp;
-
-    start = rover;
-    bp = rover;
-
-    do
+    for (bp = free_listp; bp != NULL; bp = GET_SUCC(bp))
     {
-        if (asize <= GET_SIZE(HDRP(bp)))
+        size_t csize = GET_SIZE(HDRP(bp));
+        if (asize <= csize)
         {
-            rover = GET_SUCC(bp);
-
-            if (rover == NULL)
-                rover = free_listp;
-
-            return bp;
+            if (csize == asize) {
+                return bp;  // 딱 맞으면 바로 반환 (더 찾아볼 필요 없음)
+            }
+            if (csize < best_size) {
+                best_size = csize;
+                best_bp = bp;
+            }
         }
-
-        bp = GET_SUCC(bp);
-
-        if (bp == NULL)
-            bp = free_listp;
-
-    } while (bp != start);
-
-    return NULL;
+    }
+    return best_bp;  // 못 찾으면 NULL
 }
 
 // 분할 배치
@@ -316,7 +303,7 @@ void *mm_realloc(void *bp, size_t size)
             // 뒷부분: free
             PUT(HDRP(next_bp), PACK(oldsize - asize, 0));
             PUT(FTRP(next_bp), PACK(oldsize - asize, 0));
-            insert_free(next_bp);
+            coalesce(next_bp);
         }
         return bp;
     }
