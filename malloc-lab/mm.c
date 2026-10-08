@@ -62,18 +62,27 @@ static void *rover;
 
 void insert_free(void *bp)
 {
-    SET_SUCC(bp, free_listp);
-    SET_PRED(bp, NULL);
+    void *cur = free_listp;
+    void *prev = NULL;
 
-    if (free_listp != NULL)
+    // bp보다 주소가 큰 첫 블록을 찾을 때까지 순회
+    while (cur != NULL && cur < bp)
     {
-        SET_PRED(free_listp, bp);
+        prev = cur;
+        cur = GET_SUCC(cur);
     }
 
-    free_listp = bp;
+    // bp를 prev와 cur 사이에 삽입
+    SET_SUCC(bp, cur);
+    SET_PRED(bp, prev);
 
-    if (rover == NULL)
-        rover = bp;
+    if (cur != NULL)
+        SET_PRED(cur, bp);
+
+    if (prev != NULL)
+        SET_SUCC(prev, bp);
+    else
+        free_listp = bp;   // bp가 맨 앞(가장 낮은 주소)
 }
 void remove_free(void *bp)
 {
